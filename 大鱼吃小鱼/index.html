@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>国内大循环大鱼吃小鱼</title>
+    <style>
+        * {margin: 0; padding: 0; box-sizing: border-box;}
+        body {background: #1a2a6c; display: flex; justify-content: center; align-items: center; min-height: 100vh;}
+        #gameCanvas {border: 3px solid #fff; background: #2c3e50;}
+        .game-panel {position: absolute; top: 20px; left: 50%; transform: translateX(-50%); color: #fff; font-family: Arial, sans-serif; text-align: center;}
+        .game-over, .level-pass {position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; font-size: 30px; text-align: center; display: none;}
+        .btn {margin-top: 20px; padding: 10px 20px; font-size: 20px; cursor: pointer; background: #2ecc71; border: none; border-radius: 5px; color: #fff;}
+        .btn:hover {background: #27ae60;}
+        /* 计分动画样式 */
+        .score-pop {position: absolute; color: #ffd700; font-size: 18px; font-weight: bold; pointer-events: none; animation: pop 0.8s ease-out forwards;}
+        @keyframes pop {
+            0% {opacity: 1; transform: translateY(0);}
+            100% {opacity: 0; transform: translateY(-30px);}
+        }
+    </style>
+</head>
+<body>
+    <div class="game-panel">
+        <h2>国内大循环大鱼吃小鱼 - 第<span id="level">1</span>关</h2>
+        <p>目标：吃掉<span id="target">5</span>个核心要素小鱼 | 当前：<span id="count">0</span></p >
+        <p>操控：鼠标移动控制大鱼方向</p >
+    </div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div class="game-over" id="gameOver">
+        <p>游戏失败！吃错干扰因素了</p >
+        <button class="btn" onclick="restartGame()">重新开始</button>
+    </div>
+    <div class="level-pass" id="levelPass">
+        <p>第<span id="passLevel">1</span>关通关！</p >
+        <button class="btn" id="nextLevelBtn" onclick="nextLevel()">下一关</button>
+        <button class="btn" style="display: none;" id="restartBtn" onclick="restartGame()">重新玩</button>
+    </div>
+
+    <script>
+        // 画布与上下文
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+
+        // 音效创建
+        const eatSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-arcade-game-jump-coin-216.mp3');
+        const gameOverSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-player-losing-or-failing-2042.mp3');
+        const levelPassSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-video-game-win-2016.mp3');
+        // 调整音效音量
+        eatSound.volume = 0.5;
+        gameOverSound.volume = 0.5;
+        levelPassSound.volume = 0.5;
+
+        // 游戏状态
+        let gameState = {
+            level: 1,
+            targetCount: 5,
+            currentCount: 0,
+            isGameOver: false,
+            isLevelPass: false,
+            fishSpeed: 1,
+            enemySpeed: 4,
+            elementTypes: [
+                {name: '消费', color: '#e74c3c', isGood: true},
+                {name: '投资', color: '#3498db', isGood: true},
+                {name: '产业链', color: '#9b59b6', isGood: true},
+                {name: '内需', color: '#f1c40f', isGood: true},
+                {name: '数字经济', color: '#1abc9c', isGood: true},
+                {name: '贸易保护', color: '#ff0000', isGood: false},
+                {name: '产能过剩', color: '#808080', isGood: false},
+                {name: '供应链断裂', color: '#000000', isGood: false},
+                // 添加更多移动选项（小鱼种类）
+                {name: '新能源', color: '#16a085', isGood: true},
+                {name: '人工智能', color: '#8e44ad', isGood: true},
+                {name: '环境污染', color: '#7f8c8d', isGood: false},
+                {name: '经济危机', color: '#c0392b', isGood: false}
+            ]
+        };
+
+        // 大鱼（国内大循环）
+        const player = {
+            x: canvasWidth / 2,
+            y: canvasHeight / 2,
+            radius: 30,
+            color: '#2ecc71',
+            speed: 1
+        };
+
+        // 小鱼数组
+        let smallFishes = [];
+        const smallFishCount = 15;
+
+        // 加载大鱼图片
+        const bigFishImg = new Image();
+        bigFishImg.src = 'images/Bigfish.jpg';
+
+        // 加载小鱼图片
+        const smallFishImages = [
+            'images/Smallfish1.jpg',
+            'images/Smallfish2.jpg',
+            'images/Smallfish3.jpg',
+            'images/Smallfish4.jpg',
+            'images/Smallfish5.jpg',
+            'images/Smallfish6.jpg',
+            'images/Smallfish7.jpg'
+        ].map(src => {
+            const img = new Image();
+            img.src = src;
+            return img;
+        });
+
+        // 确保图片加载完成后再启动游戏
+        let imagesLoaded = 0;
+        const totalImages = 1 + smallFishImages.length; // 大鱼 + 小鱼图片数量
+
+        // 检查所有图片是否加载完成
+        function checkImagesLoaded() {
+            imagesLoaded++;
+            if (imagesLoaded === totalImages) {
+                // 所有图片加载完成后启动游戏
+                initSmallFishes();
+                gameLoop();
+            }
+        }
+
+        // 加载大鱼图片
+        bigFishImg.onload = checkImagesLoaded;
+
+        // 加载小鱼图片
+        smallFishImages.forEach(img => {
+            img.onload = checkImagesLoaded;
+        });
+
+        // 修改大鱼形状为鱼形，并降低移动速度
+        function drawPlayer() {
+            ctx.drawImage(bigFishImg, player.x - player.radius, player.y - player.radius, player.radius * 2, player.radius * 2);
+            // 添加文字
+            ctx.fillStyle = '#FFD700'; // 金色文字
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('大鱼', player.x, player.y);
+        }
+
+        // 小鱼形状为鱼形
+        function drawSmallFishes() {
+            smallFishes.forEach(fish => {
+                ctx.drawImage(fish.image, fish.x - fish.radius, fish.y - fish.radius, fish.radius * 2, fish.radius * 2);
+                // 添加文字
+                ctx.fillStyle = fish.isGood ? '#00FF00' : '#FF4500'; // 好鱼绿色，坏鱼橙红色
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(fish.name, fish.x, fish.y);
+            });
+        }
+
+        // 初始化小鱼
+        function initSmallFishes() {
+            smallFishes = [];
+            for (let i = 0; i < smallFishCount + (gameState.level - 1) * 5; i++) {
+                const randomType = gameState.elementTypes[Math.floor(Math.random() * gameState.elementTypes.length)];
+                const randomImage = smallFishImages[Math.floor(Math.random() * smallFishImages.length)];
+                smallFishes.push({
+                    x: Math.random() * (canvasWidth - 40) + 20,
+                    y: Math.random() * (canvasHeight - 40) + 20,
+                    radius: Math.random() * 10 + 5,
+                    color: randomType.color,
+                    isGood: randomType.isGood,
+                    name: randomType.name,
+                    image: randomImage, // 随机分配图片
+                    dx: (Math.random() - 0.5) * gameState.fishSpeed,
+                    dy: (Math.random() - 0.5) * gameState.fishSpeed
+                });
+            }
+        }
+
+        // 更新小鱼位置
+        function updateSmallFishes() {
+            smallFishes.forEach(fish => {
+                fish.x += fish.dx;
+                fish.y += fish.dy;
+                // 边界碰撞
+                if (fish.x < fish.radius || fish.x > canvasWidth - fish.radius) fish.dx = -fish.dx;
+                if (fish.y < fish.radius || fish.y > canvasHeight - fish.radius) fish.dy = -fish.dy;
+            });
+        }
+
+        // 计分动画创建
+        function createScorePop(x, y) {
+            const pop = document.createElement('div');
+            pop.className = 'score-pop';
+            pop.textContent = '+1';
+            pop.style.left = x + 'px';
+            pop.style.top = y + 'px';
+            document.body.appendChild(pop);
+            // 动画结束后移除元素
+            setTimeout(() => {
+                pop.remove();
+            }, 800);
+        }
+
+        // 碰撞检测
+        function checkCollision() {
+            for (let i = smallFishes.length - 1; i >= 0; i--) {
+                const fish = smallFishes[i];
+                const dx = player.x - fish.x;
+                const dy = player.y - fish.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < player.radius + fish.radius) {
+                    if (fish.isGood) {
+                        // 吃到核心要素，播放音效+计分动画
+                        eatSound.play();
+                        createScorePop(fish.x, fish.y);
+                        gameState.currentCount++;
+                        document.getElementById('count').textContent = gameState.currentCount;
+                        smallFishes.splice(i, 1);
+                        // 检查是否通关
+                        if (gameState.currentCount >= gameState.targetCount) {
+                            levelPassSound.play();
+                            gameState.isLevelPass = true;
+                            document.getElementById('levelPass').style.display = 'block';
+                            document.getElementById('passLevel').textContent = gameState.level;
+                            if (gameState.level === 3) {
+                                document.getElementById('nextLevelBtn').style.display = 'none';
+                                document.getElementById('restartBtn').style.display = 'inline-block';
+                            }
+                        }
+                    } else {
+                        // 吃到干扰因素，游戏失败，播放音效
+                        gameOverSound.play();
+                        gameState.isGameOver = true;
+                        document.getElementById('gameOver').style.display = 'block';
+                    }
+                }
+            }
+        }
+
+        // 鼠标控制大鱼
+        canvas.addEventListener('mousemove', (e) => {
+            if (!gameState.isGameOver && !gameState.isLevelPass) {
+                const rect = canvas.getBoundingClientRect();
+                player.x = e.clientX - rect.left;
+                player.y = e.clientY - rect.top;
+                // 限制大鱼在画布内
+                player.x = Math.max(player.radius, Math.min(canvasWidth - player.radius, player.x));
+                player.y = Math.max(player.radius, Math.min(canvasHeight - player.radius, player.y));
+            }
+        });
+
+        // 游戏循环
+        function gameLoop() {
+            if (gameState.isGameOver || gameState.isLevelPass) return;
+            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+            drawPlayer();
+            drawSmallFishes();
+            updateSmallFishes();
+            checkCollision();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 重新开始游戏
+        function restartGame() {
+            gameState = {
+                level: 1,
+                targetCount: 5,
+                currentCount: 0,
+                isGameOver: false,
+                isLevelPass: false,
+                fishSpeed: 1,
+                enemySpeed: 4,
+                elementTypes: gameState.elementTypes
+            };
+            document.getElementById('level').textContent = gameState.level;
+            document.getElementById('target').textContent = gameState.targetCount;
+            document.getElementById('count').textContent = gameState.currentCount;
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('levelPass').style.display = 'none';
+            initSmallFishes();
+            gameLoop();
+        }
+
+        // 下一关
+        function nextLevel() {
+            gameState.level++;
+            gameState.targetCount += 3;
+            gameState.currentCount = 0;
+            gameState.isLevelPass = false;
+            gameState.fishSpeed = 1; // 重置小鱼速度
+            document.getElementById('level').textContent = gameState.level;
+            document.getElementById('target').textContent = gameState.targetCount;
+            document.getElementById('count').textContent = gameState.currentCount;
+            document.getElementById('levelPass').style.display = 'none';
+            initSmallFishes();
+            gameLoop();
+        }
+
+        // 初始化游戏
+        initSmallFishes();
+        gameLoop();
+    </script>
+</body>
+</html>
