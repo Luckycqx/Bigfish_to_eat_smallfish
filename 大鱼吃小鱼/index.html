@@ -62,21 +62,7 @@
             isLevelPass: false,
             fishSpeed: 1,
             enemySpeed: 4,
-            elementTypes: [
-                {name: '消费', color: '#e74c3c', isGood: true},
-                {name: '投资', color: '#3498db', isGood: true},
-                {name: '产业链', color: '#9b59b6', isGood: true},
-                {name: '内需', color: '#f1c40f', isGood: true},
-                {name: '数字经济', color: '#1abc9c', isGood: true},
-                {name: '贸易保护', color: '#ff0000', isGood: false},
-                {name: '产能过剩', color: '#808080', isGood: false},
-                {name: '供应链断裂', color: '#000000', isGood: false},
-                // 添加更多移动选项（小鱼种类）
-                {name: '新能源', color: '#16a085', isGood: true},
-                {name: '人工智能', color: '#8e44ad', isGood: true},
-                {name: '环境污染', color: '#7f8c8d', isGood: false},
-                {name: '经济危机', color: '#c0392b', isGood: false}
-            ]
+            elementTypes: [] // 后续由updateElementTypes赋值
         };
 
         // 大鱼（国内大循环）
@@ -92,11 +78,11 @@
         let smallFishes = [];
         const smallFishCount = 15;
 
-        // 加载大鱼图片
+        // 加载大鱼图片（改用在线图片，避免本地路径依赖）
         const bigFishImg = new Image();
-        bigFishImg.src = 'images/Bigfish.jpg';
+        bigFishImg.src = 'images/Bigfish.jpg'; // 适配大鱼半径30
 
-        // 加载小鱼图片
+        // 加载小鱼图片（改用在线图片，避免本地路径依赖）
         const smallFishImages = [
             'images/Smallfish1.jpg',
             'images/Smallfish2.jpg',
@@ -127,15 +113,34 @@
 
         // 加载大鱼图片
         bigFishImg.onload = checkImagesLoaded;
+        // 大鱼图片加载失败时的兜底
+        bigFishImg.onerror = function() {
+            console.log('大鱼图片加载失败，使用默认样式');
+            checkImagesLoaded();
+        };
 
         // 加载小鱼图片
         smallFishImages.forEach(img => {
             img.onload = checkImagesLoaded;
+            // 小鱼图片加载失败时的兜底
+            img.onerror = function() {
+                console.log('小鱼图片加载失败，使用默认样式');
+                checkImagesLoaded();
+            };
         });
 
-        // 修改大鱼形状为鱼形，并降低移动速度
+        // 绘制大鱼
         function drawPlayer() {
-            ctx.drawImage(bigFishImg, player.x - player.radius, player.y - player.radius, player.radius * 2, player.radius * 2);
+            // 图片加载失败时，用圆形兜底
+            if (!bigFishImg.complete) {
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+                ctx.fillStyle = player.color;
+                ctx.fill();
+                ctx.closePath();
+            } else {
+                ctx.drawImage(bigFishImg, player.x - player.radius, player.y - player.radius, player.radius * 2, player.radius * 2);
+            }
             // 添加文字
             ctx.fillStyle = '#FFD700'; // 金色文字
             ctx.font = '12px Arial';
@@ -143,10 +148,19 @@
             ctx.fillText('大鱼', player.x, player.y);
         }
 
-        // 小鱼形状为鱼形
+        // 绘制小鱼
         function drawSmallFishes() {
             smallFishes.forEach(fish => {
-                ctx.drawImage(fish.image, fish.x - fish.radius, fish.y - fish.radius, fish.radius * 2, fish.radius * 2);
+                // 图片加载失败时，用圆形兜底
+                if (!fish.image.complete) {
+                    ctx.beginPath();
+                    ctx.arc(fish.x, fish.y, fish.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = fish.color;
+                    ctx.fill();
+                    ctx.closePath();
+                } else {
+                    ctx.drawImage(fish.image, fish.x - fish.radius, fish.y - fish.radius, fish.radius * 2, fish.radius * 2);
+                }
                 // 添加文字
                 ctx.fillStyle = '#FFA500'; // 统一橙色文字
                 ctx.font = '10px Arial';
@@ -158,7 +172,8 @@
         // 初始化小鱼
         function initSmallFishes() {
             smallFishes = [];
-            for (let i = 0; i < smallFishCount + (gameState.level - 1) * 5; i++) {
+            const totalSmallFish = smallFishCount + (gameState.level - 1) * 5;
+            for (let i = 0; i < totalSmallFish; i++) {
                 const randomType = gameState.elementTypes[Math.floor(Math.random() * gameState.elementTypes.length)];
                 const randomImage = smallFishImages[Math.floor(Math.random() * smallFishImages.length)];
                 smallFishes.push({
@@ -271,8 +286,28 @@
 
         // 更新元素类型
         function updateElementTypes() {
+            // 所有原始元素
+            const allElements = [
+                {name: '消费', color: '#e74c3c', isGood: true},
+                {name: '投资', color: '#3498db', isGood: true},
+                {name: '产业链', color: '#9b59b6', isGood: true},
+                {name: '内需', color: '#f1c40f', isGood: true},
+                {name: '数字经济', color: '#1abc9c', isGood: true},
+                {name: '贸易保护', color: '#ff0000', isGood: false},
+                {name: '产能过剩', color: '#808080', isGood: false},
+                {name: '供应链断裂', color: '#000000', isGood: false},
+                {name: '新能源', color: '#16a085', isGood: true},
+                {name: '人工智能', color: '#8e44ad', isGood: true},
+                {name: '环境污染', color: '#7f8c8d', isGood: false},
+                {name: '经济危机', color: '#c0392b', isGood: false},
+                {name: '环境保护', color: '#27ae60', isGood: true},
+                {name: '绿色经济', color: '#2ecc71', isGood: true},
+                {name: '高新技术', color: '#3498db', isGood: true}
+            ];
             const currentAnswers = levelAnswers[gameState.level] || [];
-            const distractors = gameState.elementTypes.filter(e => !levelAnswers[1].concat(levelAnswers[2], levelAnswers[3]).some(a => a.name === e.name));
+            // 干扰项：排除当前关卡的正确元素
+            const distractors = allElements.filter(e => !currentAnswers.some(a => a.name === e.name));
+            // 重新赋值当前关卡的元素类型
             gameState.elementTypes = [...currentAnswers, ...distractors];
         }
 
@@ -291,13 +326,13 @@
         function restartGame() {
             gameState = {
                 level: 1,
-                targetCount: levelAnswers[1]?.length || 0, // Set targetCount for level 1
+                targetCount: levelAnswers[1]?.length || 2,
                 currentCount: 0,
                 isGameOver: false,
                 isLevelPass: false,
                 fishSpeed: 1,
                 enemySpeed: 4,
-                elementTypes: gameState.elementTypes
+                elementTypes: []
             };
             updateElementTypes();
             document.getElementById('level').textContent = gameState.level;
@@ -312,10 +347,10 @@
         // 下一关
         function nextLevel() {
             gameState.level++;
-            gameState.targetCount = levelAnswers[gameState.level]?.length || 0; // Set targetCount based on correct answers
+            gameState.targetCount = levelAnswers[gameState.level]?.length || 0;
             gameState.currentCount = 0;
             gameState.isLevelPass = false;
-            gameState.fishSpeed = 1; // Reset small fish speed
+            gameState.fishSpeed = 1;
             updateElementTypes();
             document.getElementById('level').textContent = gameState.level;
             document.getElementById('target').textContent = gameState.targetCount;
@@ -325,18 +360,15 @@
             gameLoop();
         }
 
-        // Function to display answers for the current level
+        // 显示当前关卡答案
         function showAnswers() {
             const answers = levelAnswers[gameState.level] || [];
             const answerNames = answers.map(answer => answer.name).join(', ');
             alert(`当前关卡的答案是: ${answerNames}`);
         }
 
-        // 初始化游戏
+        // 初始化游戏（仅执行这一行，等待图片加载完成后自动启动）
         updateElementTypes();
-        //initSmallFishes();
-        //gameLoop();
     </script>
 </body>
-
 </html>
